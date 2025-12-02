@@ -34,6 +34,7 @@ export default function ChatInterface() {
         content: msg.content,
       }))
 
+      // Call the Vercel serverless function directly
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
