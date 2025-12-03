@@ -1,33 +1,33 @@
 """
 Vercel serverless function for handling chat requests with OpenAI GPT-4.
-This replaces the FastAPI backend for Vercel deployment.
 """
 from http.server import BaseHTTPRequestHandler
 import json
 import os
-from openai import OpenAI
-
-# Initialize OpenAI client
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle POST requests to /api/chat"""
         try:
             # Check if API key is configured
-            if not os.environ.get("OPENAI_API_KEY"):
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key:
                 self.send_error_response(500, "OPENAI_API_KEY not configured")
                 return
             
             # Read request body
             content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self.send_error_response(400, "Empty request body")
+                return
+                
             body = self.rfile.read(content_length)
             
             # Parse JSON request
             try:
                 request_data = json.loads(body.decode('utf-8'))
-            except json.JSONDecodeError:
-                self.send_error_response(400, "Invalid JSON in request body")
+            except json.JSONDecodeError as e:
+                self.send_error_response(400, f"Invalid JSON in request body: {str(e)}")
                 return
             
             # Validate request structure
@@ -50,6 +50,12 @@ class handler(BaseHTTPRequestHandler):
                     "content": "You are a supportive mental coach."
                 })
             
+            # Import OpenAI here to avoid module-level initialization issues
+            from openai import OpenAI
+            
+            # Initialize OpenAI client inside the handler
+            client = OpenAI(api_key=api_key)
+            
             # Call OpenAI API
             response = client.chat.completions.create(
                 model="gpt-4",
@@ -63,6 +69,10 @@ class handler(BaseHTTPRequestHandler):
             # Send success response
             self.send_success_response(response_data)
             
+        except ImportError as e:
+            error_message = f"Import error: {str(e)}"
+            print(f"Error: {error_message}")
+            self.send_error_response(500, error_message)
         except Exception as e:
             # Handle errors
             error_message = f"Error calling OpenAI API: {str(e)}"
@@ -99,4 +109,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
-
+    
+    def log_message(self, format, *args):
+        """Override to prevent default logging"""
+        pass
